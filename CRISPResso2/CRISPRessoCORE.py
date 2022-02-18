@@ -25,13 +25,26 @@ import re
 import subprocess as sb
 import traceback
 
-
+from skbio.alignment import StripedSmithWaterman
 from CRISPResso2 import CRISPRessoCOREResources
 from CRISPResso2 import CRISPRessoReport
 from CRISPResso2 import CRISPRessoShared
 from CRISPResso2 import CRISPRessoPlot
 from CRISPResso2 import CRISPResso2Align
 from CRISPResso2 import CRISPRessoMultiProcessing
+
+# matches mis-matches StripedSmithWaterman score
+# 34	0	68
+# 33	1	63
+# 32	2	58
+# 31	3	53
+# 30	4	48
+# 29	5	43
+# 28	6	38
+# 27	7	33
+# 26	8	28
+# 25	9	23
+
 
 from datetime import datetime
 present = datetime.now()
@@ -2715,19 +2728,23 @@ def main():
                 df_alleles.loc[:, crispresso2Cols].to_csv(allele_frequency_table_fileLoc, sep='\t', header=True, index=None)
         else:
             info('Writing file for alleles with dsODN')
-            df_alleles["contains dsODN fw"] = df_alleles["Aligned_Sequence"].str.find(args.dsODN) > 0
-            df_alleles["contains dsODN rv"] = df_alleles["Aligned_Sequence"].str.find(CRISPRessoShared.reverse_complement(args.dsODN)) > 0
+            fwd_query= StripedSmithWaterman(args.dsODN, gap_open_penalty=10)
+            rev_query = StripedSmithWaterman(CRISPRessoShared.reverse_complement(args.dsODN), gap_open_penalty=10)
+            df_alleles["contains dsODN fw"] = [fwd_query(x).optimal_alignment_score>30 for x in df_alleles["Aligned_Sequence"]]
+            df_alleles["contains dsODN rv"] = [rev_query(x).optimal_alignment_score>30 for x in df_alleles["Aligned_Sequence"]]
+            # df_alleles["contains dsODN fw"] = df_alleles["Aligned_Sequence"].str.find(args.dsODN) > 0
+            # df_alleles["contains dsODN rv"] = df_alleles["Aligned_Sequence"].str.find(CRISPRessoShared.reverse_complement(args.dsODN)) > 0
             df_alleles["contains dsODN"] = df_alleles["contains dsODN fw"] | df_alleles["contains dsODN rv"]
 
             dsODN_cols = crispresso2Cols[:]
             dsODN_cols.append("contains dsODN")
 
-            if len(args.dsODN) > 6:
-                sub_dsODN = args.dsODN[3:-3]
-                df_alleles["contains dsODN fragment fw"] = df_alleles["Aligned_Sequence"].str.find(sub_dsODN) > 0
-                df_alleles["contains dsODN fragment rv"] = df_alleles["Aligned_Sequence"].str.find(CRISPRessoShared.reverse_complement(sub_dsODN)) > 0
-                df_alleles["contains dsODN fragment"] = df_alleles["contains dsODN fragment fw"] | df_alleles["contains dsODN fragment rv"]
-            dsODN_cols.append("contains dsODN fragment")
+            # if len(args.dsODN) > 6:
+                # sub_dsODN = args.dsODN[3:-3]
+                # df_alleles["contains dsODN fragment fw"] = df_alleles["Aligned_Sequence"].str.find(sub_dsODN) > 0
+                # df_alleles["contains dsODN fragment rv"] = df_alleles["Aligned_Sequence"].str.find(CRISPRessoShared.reverse_complement(sub_dsODN)) > 0
+                # df_alleles["contains dsODN fragment"] = df_alleles["contains dsODN fragment fw"] | df_alleles["contains dsODN fragment rv"]
+            # dsODN_cols.append("contains dsODN fragment")
 
             if args.write_detailed_allele_table:
                 df_alleles.to_csv(allele_frequency_table_fileLoc, sep='\t', header=True, index=None)
